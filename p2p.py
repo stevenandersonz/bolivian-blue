@@ -31,32 +31,29 @@ def extract_order_number(strings):
             return int(match.group(1))
     return None
     
-def fetch_tables_binance():
-    data = {
-        "compra":[],
-        "venta":[]
-    }
+data = {
+    "compra":[],
+    "venta":[]
+}
 
-    for opt, url in zip(["venta", "compra"], ["https://p2p.binance.com/en/trade/sell/USDT?fiat=BOB&payment=all-payments","https://p2p.binance.com/trade/all-payments/USDT?fiat=BOB"]):
-        driver.get(url)
-        driver.implicitly_wait(10)
-        attempts = 3
-        for _ in range(attempts):
-            try:
-                rows = driver.find_elements(By.CSS_SELECTOR, 'tr')  
-                for row in rows:
-                    cols = [col.text for col in row.find_elements(By.CSS_SELECTOR, 'td')]
-                    orders = extract_order_number(cols)
-                    if cols and orders > 100:
-                        data[opt].append(cols)
-            except StaleElementReferenceException:
-                time.sleep(1)  
-    driver.quit()
-    avg_price_sell = sum([float(row[1].split('\n')[0]) for row in data["venta"]]) / len(data["venta"])
-    avg_price_buy = sum([float(row[1].split('\n')[0]) for row in data["compra"]]) / len(data["compra"])
-    return avg_price_sell, avg_price_buy
+for opt, url in zip(["venta", "compra"], ["https://p2p.binance.com/en/trade/sell/USDT?fiat=BOB&payment=all-payments","https://p2p.binance.com/trade/all-payments/USDT?fiat=BOB"]):
+    driver.get(url)
+    driver.implicitly_wait(10)
+    attempts = 3
+    for _ in range(attempts):
+        try:
+            rows = driver.find_elements(By.CSS_SELECTOR, 'tr')  
+            for row in rows:
+                cols = [col.text for col in row.find_elements(By.CSS_SELECTOR, 'td')]
+                orders = extract_order_number(cols)
+                if cols and orders > 100:
+                    data[opt].append(cols)
+        except StaleElementReferenceException:
+            time.sleep(1)  
 
-sell_price, buy_price = fetch_tables_binance()
+driver.quit()
+sell_price = sum([float(row[1].split('\n')[0]) for row in data["venta"]]) / len(data["venta"])
+buy_price = sum([float(row[1].split('\n')[0]) for row in data["compra"]]) / len(data["compra"])
 
 print(f"USTD -> BOB: {sell_price:.2f}")
 print(f"BOB -> USTD: {buy_price:.2f}")
@@ -65,41 +62,21 @@ conn = sqlite3.connect('prices.db')
 
 cursor = conn.cursor()
 
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS USDT2BS (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    price INTEGER,
-    date DATETIME,
-    source TEXT
-)
-''')
+for price, name in zip([sell_price, buy_price],["USDT2BS", "BS2USTD"]):
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {name} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        price INTEGER,
+        date DATETIME,
+        source TEXT
+    )
+    ''')
+    cursor.execute(f'''
+    INSERT INTO {name} (price, date, source)
+    VALUES (?, ?, ?)
+    ''', (f"{price:.2f}", datetime.now(), "binance"))
+    conn.commit()
+    print(f"{name} Data Saved")
 
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS BS2USDT (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    price INTEGER,
-    date DATETIME,
-    source TEXT
-)
-''')
-
-# Step 4: Insert the data into the table
-cursor.execute('''
-INSERT INTO USDT2BS (price, date, source)
-VALUES (?, ?, ?)
-''', (f"{sell_price:.2f}", datetime.now(), "binance"))
-conn.commit()
-print("Sell Data Saved")
-
-
-cursor.execute('''
-INSERT INTO BS2USDT (price, date, source)
-VALUES (?, ?, ?)
-''', (f"{buy_price:.2f}", datetime.now(), "binance"))
-conn.commit()
-print("Buy Data Saved")
-
-# Step 6: Close the connection
 conn.close()
-
 print("Data inserted successfully.")
