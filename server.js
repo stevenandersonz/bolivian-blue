@@ -12,32 +12,50 @@ const db = new sqlite3.Database("./prices.db", sqlite3.OPEN_READONLY, (err) => {
   }
 });
 
-app.get("/", (req, res) => {
-  db.get("SELECT * FROM USTD2BS ORDER BY date DESC LIMIT 1", [], (err, row) => {
-    if (err) {
-      res.status(500).send("Error retrieving data from the database.");
-      return console.error(err.message);
-    }
-
-    console.log(typeof row.price);
-    // Generate HTML content dynamically
-    let htmlContent = `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Boliviano Blue</title>
-            </head>
-            <body>
-                <h1> Bolivian Blue </h1>
-                <h2>USDT -> BO: ${row.price}</h2>
-            </body>
-            </html>
-        `;
-
-    res.send(htmlContent);
+app.get("/", async (req, res) => {
+  let sell = await new Promise((resolve, reject) => {
+    db.get(
+      "SELECT * FROM USDT2BS ORDER BY date DESC LIMIT 1",
+      [],
+      (err, row) => {
+        if (err) {
+          reject("error getting sell prices");
+        }
+        resolve(row);
+      }
+    );
   });
+
+  let buy = await new Promise((resolve, reject) => {
+    db.get("SELECT * FROM BS2USDT", [], (err, row) => {
+      if (err) {
+        reject("error getting buy prices");
+      }
+      console.log(row);
+      resolve(row);
+    });
+  });
+  console.log(sell);
+  console.log(buy);
+
+  // Generate HTML content dynamically
+  let htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Boliviano Blue</title>
+    </head>
+    <body>
+        <h1> Bolivian Blue </h1>
+        <h2>USDT -> BO: ${sell.price}</h2>
+        <h2>BO -> USDT: ${buy.price}</h2>
+    </body>
+    </html>
+    `;
+
+  res.send(htmlContent);
 });
 
 app.listen(PORT, () => {

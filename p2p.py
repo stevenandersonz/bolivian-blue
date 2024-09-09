@@ -8,6 +8,7 @@ from tabulate import tabulate
 import time
 import sqlite3
 from datetime import datetime
+import re
 
 chrome_options = Options()
 chrome_options.add_argument("--headless")
@@ -22,6 +23,14 @@ chrome_options.add_argument("--start-maximized")
 chrome_options.add_argument("--disable-setuid-sandbox")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
+def extract_order_number(strings):
+    pattern = r'(\d+)\s*orders'
+    for string in strings:
+        match = re.search(pattern, string)
+        if match:
+            return int(match.group(1))
+    return None
+    
 def fetch_tables_binance():
     data = {
         "compra":[],
@@ -37,7 +46,8 @@ def fetch_tables_binance():
                 rows = driver.find_elements(By.CSS_SELECTOR, 'tr')  
                 for row in rows:
                     cols = [col.text for col in row.find_elements(By.CSS_SELECTOR, 'td')]
-                    if cols:
+                    orders = extract_order_number(cols)
+                    if cols and orders > 100:
                         data[opt].append(cols)
             except StaleElementReferenceException:
                 time.sleep(1)  
@@ -78,13 +88,16 @@ cursor.execute('''
 INSERT INTO USDT2BS (price, date, source)
 VALUES (?, ?, ?)
 ''', (f"{sell_price:.2f}", datetime.now(), "binance"))
-
 conn.commit()
+print("Sell Data Saved")
+
 
 cursor.execute('''
 INSERT INTO BS2USDT (price, date, source)
 VALUES (?, ?, ?)
 ''', (f"{buy_price:.2f}", datetime.now(), "binance"))
+conn.commit()
+print("Buy Data Saved")
 
 # Step 6: Close the connection
 conn.close()
