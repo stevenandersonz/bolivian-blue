@@ -27,11 +27,10 @@ app.get("/", async (req, res) => {
   });
 
   let buy = await new Promise((resolve, reject) => {
-    db.get("SELECT * FROM BS2USDT", [], (err, row) => {
+    db.get("SELECT * FROM BS2USDT BY date DESC LIMIT 1", [], (err, row) => {
       if (err) {
         reject("error getting buy prices");
       }
-      console.log(row);
       resolve(row);
     });
   });
